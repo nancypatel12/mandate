@@ -1,0 +1,46 @@
+[project]
+name = "mandate"
+version = "0.1.0"
+description = "Spending mandates for AI agents: a deterministic fence in front of PayPal."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic==2.14.3",
+    "pyjwt==2.15.1",
+    "python-ulid==4.1.0",
+]
+
+[project.scripts]
+mandate = "mandate.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+]
+
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+# The package lives at services/mandate/ but imports as `mandate`.
+[tool.hatch.build.targets.wheel]
+packages = ["services/mandate"]
+
+[tool.hatch.build.targets.wheel.sources]
+"services/mandate" = "mandate"
+
+[tool.hatch.build]
+dev-mode-dirs = ["services"]
+
+[tool.pytest.ini_options]
+testpaths = ["services/mandate/tests"]
+addopts = "--cov=mandate --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 90
