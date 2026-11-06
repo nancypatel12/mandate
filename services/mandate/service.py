@@ -180,9 +180,8 @@ def _authorize(conn, key, token, raw_intent, now, broker) -> Result:
                 spend.release(conn, mandate.mandate_id, start, intent.amount_cents)
                 conn.execute("DELETE FROM intents WHERE mandate_id = ? AND intent_id = ?",
                              (mandate.mandate_id, intent.intent_id))
-                return _log(conn, Verdict.deny(ReasonCode.UPSTREAM_UNAVAILABLE,
-                                               "Payment provider unavailable. Nothing was charged."),
-                            now, mandate, intent)
+                message = getattr(e, "public_message", "Payment provider unavailable. Nothing was charged.")
+                return _log(conn, Verdict.deny(ReasonCode.UPSTREAM_UNAVAILABLE, message), now, mandate, intent)
 
     with write_txn(conn):
         result = _log(conn, verdict, now, mandate, intent, order_id)

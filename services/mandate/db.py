@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS intents (
     PRIMARY KEY (mandate_id, intent_id)
 );
 
+-- The human's vaulted PayPal wallet. payment_token_id is a payment capability:
+-- it never leaves this service and is never logged or returned by the API.
+CREATE TABLE IF NOT EXISTS funding (
+    user_id            TEXT PRIMARY KEY,
+    setup_token_id     TEXT NOT NULL,
+    payment_token_id   TEXT,
+    paypal_customer_id TEXT,
+    started_at         TEXT NOT NULL,
+    funded_at          TEXT
+);
+
 CREATE TABLE IF NOT EXISTS ledger (
     seq          INTEGER PRIMARY KEY AUTOINCREMENT,
     ledger_id    TEXT NOT NULL UNIQUE,

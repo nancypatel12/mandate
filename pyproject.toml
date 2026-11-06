@@ -6,9 +6,12 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi==0.162.0",
+    "httpx==0.28.1",
     "pydantic==2.14.3",
     "pyjwt==2.15.1",
     "python-ulid==4.1.0",
+    "uvicorn==0.54.0",
 ]
 
 [project.scripts]
