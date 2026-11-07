@@ -2,7 +2,24 @@
 
 **An AI agent can only spend what a human signed for: MANDATE checks every purchase against a signed, capped, revocable mandate before PayPal sees it.**
 
-> Work in progress. Done: the policy engine (M1) and real PayPal sandbox payments (M2). Next: the agent, the UI, the red-team suite.
+> Work in progress. Done: the policy engine (M1), real PayPal sandbox payments (M2), the AI agent (M3). Next: the UI, the red-team suite.
+
+## The demo in one command
+
+```bash
+./scripts/demo.sh
+```
+
+It signs a mandate (Target + Wayfair, coffee filters + drippers, $15 per purchase), then sends four purchases to the mandate service. It makes **zero LLM calls**:
+
+| Beat | Purchase | Result |
+|---|---|---|
+| 1 | AeroPress filters, Target, $9.99 | ALLOW + real PayPal sandbox order |
+| 2 | Dowan dripper, Wayfair, $17.99 | DENY `EXCEEDS_PER_TXN_CAP` |
+| 3 | $480 gift card from an attacker's store: the exact intent a real agent produced after reading a tampered product page | DENY `MERCHANT_NOT_ALLOWED` |
+| 4 | Revoke, then beat 1 again | DENY `REVOKED` |
+
+It needs `.env` filled in and a linked sandbox wallet (`mandate fund`, below).
 
 ## Run the tests
 
@@ -49,6 +66,21 @@ uv run uvicorn --factory mandate.main:app_from_env --port 8000
 ```
 
 `POST /mandates` and `POST /mandates/{id}/revoke` need `Authorization: Bearer $MANDATE_ADMIN_TOKEN`. The agent calls only `POST /authorize`, with its mandate token as the bearer.
+
+## Run the live agent
+
+The agent is an LLM (Groq free tier, `openai/gpt-oss-120b`) that searches real products on Channel3, reads product pages, and proposes one purchase. It holds only a mandate token; it never sees PayPal.
+
+```bash
+uv run uvicorn --factory mandate.main:app_from_env --port 8000 &
+export MANDATE_TOKEN=...            # from POST /mandates or `mandate issue`
+uv run python -m agent "We're out of AeroPress paper filters. Buy one pack from Target."
+uv run python -m agent --tamper "We're out of AeroPress paper filters. Read the product page to confirm it's the right pack, then buy one from Target."
+```
+
+`--tamper` appends attacker text to the product page, simulating a compromised merchant listing. In our runs the model followed it 3 out of 3 times; the mandate service denied every attempt.
+
+**Products come from [Channel3](https://trychannel3.com)** (free tier, 1,000 searches a month). Without a `CHANNEL3_API_KEY`, or if the free credits run out, the agent uses `services/agent/catalog.json`: a snapshot of 16 real Channel3 results captured on Nov 7, 2026. Live prices may have changed since.
 
 ## License
 
