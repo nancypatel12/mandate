@@ -1,0 +1,135 @@
+/* The console follows Nancy's portfolio look: Inter for text, VCR OSD Mono for the
+   project name only, black on white, one accent per view, no shadows, no motion.
+   The accent marks denials: they are what this product exists to show. */
+
+@font-face {
+  font-family: "VCR OSD Mono";
+  src: url("/fonts/VCROSDMono.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+
+:root {
+  --ink: #000;
+  --muted: #888;
+  --line: #e6e6e6;
+  --soft: #f4f4f6;
+  --bar: #cfcfd6;
+  --accent: #3a4fbf;
+  --bg: #fff;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+strong, b { font-weight: 600; }
+code, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+code { background: var(--soft); padding: 2px 5px; border-radius: 4px; }
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  height: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 16px 64px;
+}
+
+header h1 {
+  font-family: "VCR OSD Mono", monospace;
+  font-size: 2.6em;
+  font-weight: normal;
+  line-height: 1.1;
+  margin: 0 0 12px;
+}
+header .tagline { font-size: 1.25em; color: var(--muted); margin: 0; }
+header .status { margin: 16px 0 0; color: var(--muted); font-size: 0.9em; }
+header .status.off { color: var(--accent); }
+
+.top { display: grid; grid-template-columns: 3fr 2fr; gap: 64px; }
+.pane { min-width: 0; }
+.pane h2 { font-size: 1.3em; font-weight: normal; margin: 0 0 16px; }
+.pane-head { display: flex; align-items: baseline; gap: 12px; }
+.pane-head .aside { margin-left: auto; color: var(--muted); font-size: 0.9em; }
+.empty, .note { color: var(--muted); margin: 0; }
+.note { font-size: 0.85em; margin-top: 16px; }
+
+.state { font-weight: 600; }
+.state.revoked, .state.expired { color: var(--accent); }
+
+select {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9em;
+}
+
+dl { display: grid; grid-template-columns: 96px 1fr; gap: 8px 16px; margin: 0 0 24px; }
+dt { color: var(--muted); }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+button.revoke {
+  padding: 8px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.revoke:hover:not(:disabled), button.revoke.armed { background: var(--ink); color: var(--bg); }
+button.revoke:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
+.error { color: var(--accent); font-size: 0.85em; }
+
+.meter { margin-bottom: 20px; }
+.meter-label { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.meter-label span:first-child { color: var(--muted); }
+.bar { height: 8px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--bar); }
+.bar > div.full { background: var(--accent); }
+
+.ledger { flex: 1; display: flex; flex-direction: column; min-height: 360px; }
+.counts b { font-weight: 600; }
+.counts .denied { color: var(--accent); }
+.grid { flex: 1; min-height: 300px; }
+.verdict { font-weight: 600; font-size: 0.85em; }
+.verdict.DENY { color: var(--accent); }
+.verdict.ALLOW { color: var(--muted); }
+/* Denied rows: a rule in the accent down the left edge, no fill. */
+.grid .denied { box-shadow: inset 3px 0 0 var(--accent); }
+.grid .denied .reason { color: var(--accent); }
+
+@media (max-width: 800px) {
+  .app { padding: 32px 16px 48px; gap: 40px; }
+  .top { grid-template-columns: 1fr; gap: 40px; }
+}

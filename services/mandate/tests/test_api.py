@@ -145,3 +145,14 @@ def test_settings_from_env():
     with pytest.raises(ValueError):
         settings_from_env({"MANDATE_SIGNING_KEY": KEY, "PAYPAL_CLIENT_ID": "a", "PAYPAL_CLIENT_SECRET": "b",
                            "PAYPAL_BASE_URL": "https://api-m.paypal.com"})
+
+
+def test_recent_mandates_newest_first(make):
+    c = make()
+    _, a = issue(c)
+    token, b = issue(c)
+    c.post(f"/mandates/{a}/revoke", headers=H)
+    rows = c.get("/mandates").json()
+    assert [r["mandate"]["mandate_id"] for r in rows] == [b, a]
+    assert rows[1]["revoked_at"] is not None and rows[0]["revoked_at"] is None
+    assert token not in str(rows)  # the console never sees mandate tokens

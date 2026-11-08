@@ -2,7 +2,20 @@
 
 **An AI agent can only spend what a human signed for: MANDATE checks every purchase against a signed, capped, revocable mandate before PayPal sees it.**
 
-> Work in progress. Done: the policy engine (M1), real PayPal sandbox payments (M2), the AI agent (M3). Next: the UI, the red-team suite.
+> Work in progress. Done: the policy engine (M1), real PayPal sandbox payments (M2), the AI agent (M3), the console and Docker (M4). Next: the red-team suite and docs.
+
+## Run it with Docker
+
+```bash
+cp .env.example .env                                   # fill in the free keys; steps are in the file
+docker compose up -d --build                           # mandate service + console
+docker compose run --rm mandate mandate fund --user nancy   # once: open the link, approve with your sandbox Personal account
+docker compose run --rm demo                           # the four beats, zero LLM calls
+```
+
+Open **http://localhost:5173**: the mandate, the spend meter, and the ledger. Click **Revoke mandate**, run the demo or the agent again, and watch the next attempt land as `REVOKED`.
+
+The console can read everything and revoke. Nothing else: its proxy refuses to issue mandates or approve purchases, and the admin token never reaches the browser.
 
 ## The demo in one command
 

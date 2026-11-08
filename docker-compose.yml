@@ -1,0 +1,60 @@
+# docker compose up        → mandate service (:8000) + console (http://localhost:5173)
+# docker compose run --rm demo                      → the four demo beats, zero LLM calls
+# docker compose run --rm mandate mandate fund --user nancy   → link a sandbox wallet once
+# MANDATE_TOKEN=... docker compose run --rm agent "buy AeroPress filters from Target" [--tamper]
+#
+# Ports bind to 127.0.0.1 only: this is a local console, not a public site.
+
+services:
+  mandate:
+    build: .
+    env_file: .env          # the only container that sees PayPal credentials
+    environment:
+      MANDATE_DB: /app/data/mandate.db
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  web:
+    build: ./web
+    environment:
+      MANDATE_ADMIN_TOKEN: ${MANDATE_ADMIN_TOKEN:?set MANDATE_ADMIN_TOKEN in .env}
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      mandate:
+        condition: service_healthy
+
+  # The agent gets an LLM key, a catalog key and a mandate token. No PayPal, no admin token (I1).
+  agent:
+    build: .
+    profiles: ["agent"]
+    entrypoint: ["python", "-m", "agent"]
+    environment:
+      MANDATE_URL: http://mandate:8000
+      MANDATE_TOKEN: ${MANDATE_TOKEN:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-120b}
+      CHANNEL3_API_KEY: ${CHANNEL3_API_KEY:-}
+    depends_on:
+      mandate:
+        condition: service_healthy
+
+  # Deterministic demo. Holds the admin token (it signs and revokes, as the human would).
+  demo:
+    build: .
+    profiles: ["demo"]
+    entrypoint: ["python", "scripts/demo.py"]
+    environment:
+      MANDATE_URL: http://mandate:8000
+      MANDATE_ADMIN_TOKEN: ${MANDATE_ADMIN_TOKEN:?set MANDATE_ADMIN_TOKEN in .env}
+    depends_on:
+      mandate:
+        condition: service_healthy

@@ -97,6 +97,10 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(422, f"Invalid mandate: {str(e).splitlines()[0]}") from None
         return {"token": token, "mandate": claims.model_dump(mode="json")}
 
+    @app.get("/mandates")
+    def recent(limit: int = Query(20, ge=1, le=100), c=Depends(conn)):
+        return service.recent(c, now(), limit)
+
     @app.get("/mandates/{mandate_id}")
     def read(mandate_id: str, c=Depends(conn)):
         s = service.status(c, mandate_id, now())

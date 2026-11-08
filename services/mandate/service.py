@@ -118,6 +118,13 @@ def status(conn: sqlite3.Connection, mandate_id: str, now: datetime) -> dict | N
     }
 
 
+def recent(conn: sqlite3.Connection, now: datetime, limit: int = 20) -> list[dict]:
+    """Newest mandates first, each with its current status. For the console."""
+    ids = [r["mandate_id"] for r in conn.execute(
+        "SELECT mandate_id FROM mandates ORDER BY issued_at DESC, mandate_id DESC LIMIT ?", (limit,))]
+    return [status(conn, i, now) for i in ids]
+
+
 # ── agent action ──────────────────────────────────────────────────────
 
 def authorize(

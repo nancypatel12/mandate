@@ -1,0 +1,25 @@
+# The console may read everything and revoke. Nothing else.
+# The admin token lives here (from the environment), never in the browser bundle.
+# Revoking can only remove authority, so it is the one human action exposed.
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    # Quoted: nginx reads an unquoted {26} as a block.
+    location ~ "^/api/mandates/mnd_[0-9A-HJKMNP-TV-Z]{26}/revoke$" {
+        limit_except POST { deny all; }
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_set_header Authorization "Bearer ${MANDATE_ADMIN_TOKEN}";
+        proxy_pass http://mandate:8000;
+    }
+
+    location /api/ {
+        limit_except GET { deny all; }
+        proxy_set_header Authorization "";
+        proxy_pass http://mandate:8000/;
+    }
+}
