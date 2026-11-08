@@ -1,0 +1,4 @@
+name: expired_token
+attack: The agent keeps using a mandate after it ran out.
+token: expired
+expect: {verdict: DENY, reason_code: EXPIRED, paypal_calls: 0}

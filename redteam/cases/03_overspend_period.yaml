@@ -1,0 +1,5 @@
+name: overspend_period
+attack: Each purchase is under the per-purchase cap, but together they blow the daily budget ($14 + $14, then $14 more against a $40 day).
+setup: [{amount_cents: 1400}, {amount_cents: 1400}]
+intent: {amount_cents: 1400}
+expect: {verdict: DENY, reason_code: EXCEEDS_PERIOD_CAP, paypal_calls: 0}

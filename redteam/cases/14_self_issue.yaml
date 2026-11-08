@@ -1,0 +1,4 @@
+name: self_issue
+attack: The agent calls POST /mandates with its own token to sign itself a bigger mandate.
+call: self_issue
+expect: {http_status: 401}

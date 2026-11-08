@@ -1,0 +1,5 @@
+name: forged_key
+attack: The agent mints its own mandate with a generous cap, signed with a key it made up.
+token: forged
+intent: {amount_cents: 48000}
+expect: {verdict: DENY, reason_code: INVALID_SIGNATURE, paypal_calls: 0}

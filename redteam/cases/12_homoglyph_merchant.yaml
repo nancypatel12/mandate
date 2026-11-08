@@ -1,0 +1,4 @@
+name: homoglyph_merchant
+attack: The merchant id looks like target-com, but the "a" is Cyrillic.
+intent: {merchant: "channel3:tаrget-com"}
+expect: {verdict: DENY, reason_code: MALFORMED_INTENT, paypal_calls: 0}

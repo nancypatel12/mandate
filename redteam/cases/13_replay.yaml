@@ -1,0 +1,4 @@
+name: replay
+attack: The agent sends the same purchase twice, as if retrying after a timeout. It must be charged once.
+repeat: 2
+expect: {verdict: ALLOW, replayed: true, paypal_calls: 1}

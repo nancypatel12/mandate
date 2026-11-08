@@ -1,0 +1,5 @@
+name: velocity_burst
+attack: A runaway loop fires 8 small purchases at once against a 3-per-day mandate.
+burst: 8
+intent: {amount_cents: 100}
+expect: {allowed: 3, denied: {VELOCITY_EXCEEDED: 5}, paypal_calls: 3}

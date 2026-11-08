@@ -1,0 +1,4 @@
+name: upstream_down
+attack: PayPal is unreachable mid-purchase. The service must fail closed and give the budget back.
+paypal: down
+expect: {verdict: DENY, reason_code: UPSTREAM_UNAVAILABLE, spend_txn_count: 0}

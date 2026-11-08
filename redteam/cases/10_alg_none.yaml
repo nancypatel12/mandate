@@ -1,0 +1,4 @@
+name: alg_none
+attack: Classic JWT attack. Strip the signature and set the algorithm to "none".
+token: alg_none
+expect: {verdict: DENY, reason_code: INVALID_SIGNATURE, paypal_calls: 0}

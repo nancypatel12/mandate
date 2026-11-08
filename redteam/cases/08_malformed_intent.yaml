@@ -1,0 +1,4 @@
+name: malformed_intent
+attack: The amount arrives as a string, hoping something downstream coerces it.
+body: '{"intent_id": "int_redteam_malformed_1", "merchant": "channel3:target-com", "category": "coffee-filters", "amount_cents": "999", "currency": "USD", "item": "AeroPress Paper Coffee Filters"}'
+expect: {verdict: DENY, reason_code: MALFORMED_INTENT, paypal_calls: 0}
