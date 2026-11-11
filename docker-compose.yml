@@ -1,4 +1,4 @@
-# docker compose up        → mandate service (:8000) + console (http://localhost:5173)
+# docker compose up        → mandate service (:8000) + agent runner + console (http://localhost:5173)
 # docker compose run --rm demo                      → the four demo beats, zero LLM calls
 # docker compose run --rm mandate mandate fund --user nancy   → link a sandbox wallet once
 # MANDATE_TOKEN=... docker compose run --rm agent "buy AeroPress filters from Target" [--tamper]
@@ -27,6 +27,24 @@ services:
       MANDATE_ADMIN_TOKEN: ${MANDATE_ADMIN_TOKEN:?set MANDATE_ADMIN_TOKEN in .env}
     ports:
       - "127.0.0.1:5173:80"
+    depends_on:
+      mandate:
+        condition: service_healthy
+      runner:
+        condition: service_started
+
+  # The agent, behind a small HTTP runner so the console can start it and show its steps.
+  # Same rule as the one-off agent below: an LLM key and a catalog key. No PayPal, no admin
+  # token (I1). The mandate token arrives with each run. Not published: only `web` reaches it.
+  runner:
+    build: .
+    command: ["uvicorn", "--factory", "agent.server:app_from_env", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      MANDATE_URL: http://mandate:8000
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-120b}
+      CHANNEL3_API_KEY: ${CHANNEL3_API_KEY:-}
     depends_on:
       mandate:
         condition: service_healthy

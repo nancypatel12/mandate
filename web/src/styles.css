@@ -1,6 +1,7 @@
 /* The console follows Nancy's portfolio look: Inter for text, VCR OSD Mono for the
-   project name only, black on white, one accent per view, no shadows, no motion.
-   The accent marks denials: they are what this product exists to show. */
+   project name only, black on white, one accent per view, no shadows.
+   The accent marks denials and the attacker's text: they are what this product exists
+   to show. Motion is used for one thing only: something new just arrived. */
 
 @font-face {
   font-family: "VCR OSD Mono";
@@ -51,29 +52,33 @@ code { background: var(--soft); padding: 2px 5px; border-radius: 4px; }
 .app {
   display: flex;
   flex-direction: column;
-  gap: 48px;
-  height: 100%;
-  max-width: 1120px;
+  gap: 32px;
+  min-height: 100%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 48px 16px 64px;
+  padding: 28px 24px 48px;
 }
 
+header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 20px; }
 header h1 {
   font-family: "VCR OSD Mono", monospace;
-  font-size: 2.6em;
+  font-size: 2.2em;
   font-weight: normal;
   line-height: 1.1;
-  margin: 0 0 12px;
+  margin: 0;
 }
-header .tagline { font-size: 1.25em; color: var(--muted); margin: 0; }
-header .status { margin: 16px 0 0; color: var(--muted); font-size: 0.9em; }
+header .tagline { font-size: 1.15em; color: var(--muted); margin: 0; }
+header .status { margin: 0 0 0 auto; color: var(--muted); font-size: 0.9em; }
 header .status.off { color: var(--accent); }
 
-.top { display: grid; grid-template-columns: 3fr 2fr; gap: 64px; }
+.top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; align-items: start; }
+.left { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
 .pane { min-width: 0; }
 .pane h2 { font-size: 1.3em; font-weight: normal; margin: 0 0 16px; }
 .pane-head { display: flex; align-items: baseline; gap: 12px; }
 .pane-head .aside { margin-left: auto; color: var(--muted); font-size: 0.9em; }
+.pane-head .aside ~ * { margin-left: 0; }
+.muted { color: var(--muted); }
 .empty, .note { color: var(--muted); margin: 0; }
 .note { font-size: 0.85em; margin-top: 16px; }
 
@@ -92,10 +97,91 @@ select {
   font-size: 0.9em;
 }
 
-dl { display: grid; grid-template-columns: 96px 1fr; gap: 8px 16px; margin: 0 0 24px; }
+dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 16px; margin: 0 0 20px; }
 dt { color: var(--muted); }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.actions { display: flex; align-items: center; gap: 12px; }
+button.plain {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+button.plain:hover { border-color: var(--ink); }
+button.primary {
+  padding: 8px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.primary:disabled { background: var(--bg); border-color: var(--line); color: var(--muted); cursor: default; }
+input, textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--ink); }
+
+/* ── signing a mandate ── */
+.sign { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.sign label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 0.85em; }
+.sign label input, .sign label select { font-size: 1.15em; margin: 0; }
+.sign .wide { grid-column: 1 / -1; }
+.sign .reads { margin: 4px 0; padding: 12px 14px; background: var(--soft); border-radius: 4px; line-height: 1.55; }
+
+/* ── the agent, live ── */
+.agent textarea { resize: vertical; line-height: 1.5; }
+.agent-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 0; }
+.tamper { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 0.9em; cursor: pointer; }
+.tamper input { width: auto; accent-color: var(--accent); }
+.tamper.on { color: var(--accent); font-weight: 600; }
+.feed {
+  margin-top: 16px;
+  padding: 4px 16px;
+  height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.feed .empty { padding: 12px 0; }
+.step { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); animation: arrive 0.25s ease-out; }
+.step:last-child { border-bottom: 0; }
+.step p { margin: 0; }
+.step ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.9em; }
+.step li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; }
+.step li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page { margin-top: 8px; padding: 10px 12px; background: var(--soft); border-radius: 4px; font-size: 0.9em; }
+.page > p { color: var(--muted); }
+.injected { margin-top: 10px; padding: 8px 0 2px 12px; border-left: 3px solid var(--accent); color: var(--accent); }
+.injected .tag { font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.verdict-card { margin: 12px 0; padding: 16px 18px; border: 1px solid var(--ink); border-radius: 4px; animation: land 0.45s ease-out; }
+.verdict-card:last-child { border-bottom: 1px solid var(--ink); }
+.verdict-card .big { font-size: 1.9em; font-weight: 600; line-height: 1.2; margin-bottom: 4px; }
+.verdict-card.deny { border-color: var(--accent); background: #f3f4fc; }
+.verdict-card.deny:last-child { border-color: var(--accent); }
+.verdict-card.deny .big, .verdict-card .never { color: var(--accent); }
+.verdict-card .never { font-weight: 600; margin-top: 6px; }
+.thinking::after { content: "…"; animation: blink 1.2s steps(2, start) infinite; }
+
+@keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
+@keyframes land { from { opacity: 0; transform: scale(0.97); } }
+@keyframes blink { to { visibility: hidden; } }
+@keyframes flash-deny { from { background: #dfe3f7; } }
+@keyframes flash-allow { from { background: #ececf0; } }
 
 button.revoke {
   padding: 8px 16px;
@@ -118,16 +204,25 @@ button.revoke:disabled { border-color: var(--line); color: var(--muted); cursor:
 .bar > div { height: 100%; background: var(--bar); }
 .bar > div.full { background: var(--accent); }
 
-.ledger { flex: 1; display: flex; flex-direction: column; min-height: 360px; }
+.ledger { display: flex; flex-direction: column; }
+.ledger .pane-head { align-items: center; }
+.find { width: 200px; font-size: 0.9em; }
 .counts b { font-weight: 600; }
 .counts .denied { color: var(--accent); }
-.grid { flex: 1; min-height: 300px; }
+.grid { height: 420px; }
 .verdict { font-weight: 600; font-size: 0.85em; }
 .verdict.DENY { color: var(--accent); }
 .verdict.ALLOW { color: var(--muted); }
 /* Denied rows: a rule in the accent down the left edge, no fill. */
 .grid .denied { box-shadow: inset 3px 0 0 var(--accent); }
 .grid .denied .reason { color: var(--accent); }
+/* A row that just arrived flashes once. */
+.grid .fresh { animation: flash-allow 1.6s ease-out; }
+.grid .fresh.denied { animation: flash-deny 1.6s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .step, .verdict-card, .grid .fresh, .grid .fresh.denied, .thinking::after { animation: none; }
+}
 
 @media (max-width: 800px) {
   .app { padding: 32px 16px 48px; gap: 40px; }

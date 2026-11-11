@@ -1,12 +1,32 @@
-# The console may read everything and revoke. Nothing else.
+# The console is the human's seat: read, sign a mandate, revoke one, start the agent.
 # The admin token lives here (from the environment), never in the browser bundle.
-# Revoking can only remove authority, so it is the one human action exposed.
+# It is added to exactly two calls: sign and revoke.
+#
+# Every write must carry "X-Mandate-Console: 1". A browser won't send a custom header
+# across origins without a preflight, and nothing here answers one, so another site
+# open in the same browser can't sign or revoke.
+map "$request_method:$http_x_mandate_console" $bad_write {
+    default   1;
+    ~^GET:    0;
+    ~^HEAD:   0;
+    "POST:1"  0;
+}
+
 server {
     listen 80;
     root /usr/share/nginx/html;
 
+    if ($bad_write) { return 403; }
+
     location / {
         try_files $uri /index.html;
+    }
+
+    # Sign (POST) and list (GET).
+    location = /api/mandates {
+        limit_except GET POST { deny all; }
+        proxy_set_header Authorization "Bearer ${MANDATE_ADMIN_TOKEN}";
+        proxy_pass http://mandate:8000/mandates$is_args$args;
     }
 
     # Quoted: nginx reads an unquoted {26} as a block.
@@ -21,5 +41,18 @@ server {
         limit_except GET { deny all; }
         proxy_set_header Authorization "";
         proxy_pass http://mandate:8000/;
+    }
+
+    # The agent runner: start a run, watch a run. No admin token goes here.
+    location = /agent/runs {
+        limit_except POST { deny all; }
+        proxy_set_header Authorization "";
+        proxy_pass http://runner:8001/runs;
+    }
+
+    location /agent/ {
+        limit_except GET { deny all; }
+        proxy_set_header Authorization "";
+        proxy_pass http://runner:8001/;
     }
 }

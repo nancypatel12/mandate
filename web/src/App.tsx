@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { colorSchemeLight, themeQuartz, type ColDef, type GetRowIdParams, type RowClassRules } from "ag-grid-community";
+import { colorSchemeLight, themeQuartz, type ColDef, type GetRowIdParams, type GridApi, type RowClassRules } from "ag-grid-community";
 import * as api from "./api";
 import type { LedgerRow, MandateStatus } from "./api";
+import { AgentPane } from "./Agent";
+import { SignForm } from "./SignForm";
 
 const POLL_MS = 500; // revoke must show up in the grid within a second
 
@@ -33,6 +35,8 @@ export default function App() {
   const [mandates, setMandates] = useState<MandateStatus[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
+  const known = useRef<Set<string> | null>(null);
+  const fresh = useRef(new Set<string>());
 
   useEffect(() => {
     let alive = true;
@@ -40,6 +44,9 @@ export default function App() {
       try {
         const [l, m] = await Promise.all([api.ledger(), api.mandates()]);
         if (!alive) return;
+        // Rows that arrive after the first load are marked, so the grid can flash them once.
+        if (known.current) for (const r of l) if (!known.current.has(r.ledger_id)) fresh.current.add(r.ledger_id);
+        known.current = new Set(l.map((r) => r.ledger_id));
         setRows(l);
         setMandates(m);
         setOnline(true);
@@ -64,14 +71,17 @@ export default function App() {
         <h1>MANDATE</h1>
         <p className="tagline">An AI agent can only spend what you signed for.</p>
         <p className={`status ${online ? "" : "off"}`}>
-          {online ? "Live. Updates every half second." : "Can't reach the mandate service."}
+          {online ? "Live. PayPal sandbox: no real money moves." : "Can't reach the mandate service."}
         </p>
       </header>
       <div className="top">
-        <MandatePane mandates={mandates} current={current} onPick={setPicked} />
-        <SpendPane current={current} />
+        <div className="left">
+          <MandatePane mandates={mandates} current={current} onPick={setPicked} />
+          <SpendPane current={current} />
+        </div>
+        <AgentPane current={current} />
       </div>
-      <LedgerPane rows={rows} />
+      <LedgerPane rows={rows} fresh={fresh.current} />
     </div>
   );
 }
@@ -88,6 +98,7 @@ const STATE_LABEL = { live: "Live", revoked: "Revoked", expired: "Expired" };
 function MandatePane(props: { mandates: MandateStatus[]; current: MandateStatus | null; onPick: (id: string) => void }) {
   const { mandates, current, onPick } = props;
   const [arming, setArming] = useState(false);
+  const [signing, setSigning] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -95,11 +106,16 @@ function MandatePane(props: { mandates: MandateStatus[]; current: MandateStatus 
     setError("");
   }, [current?.mandate.mandate_id]);
 
-  if (!current) {
+  const signed = (id: string) => {
+    setSigning(false);
+    onPick(id);
+  };
+
+  if (!current || signing) {
     return (
       <section className="pane">
-        <h2>Mandate</h2>
-        <p className="empty">No mandate signed yet. Run <code>./scripts/demo.sh</code> or <code>mandate issue</code>.</p>
+        <h2>{current ? "New mandate" : "Sign a mandate"}</h2>
+        <SignForm onSigned={signed} onCancel={current ? () => setSigning(false) : undefined} />
       </section>
     );
   }
@@ -134,7 +150,7 @@ function MandatePane(props: { mandates: MandateStatus[]; current: MandateStatus 
       )}
       <dl>
         <dt>Signed by</dt><dd>{m.issuer} for <b>{m.subject}</b></dd>
-        <dt>Merchants</dt><dd className="chips">{m.merchant_allowlist.map((x) => <code key={x}>{x}</code>)}</dd>
+        <dt>Merchants</dt><dd className="chips merchants-row">{m.merchant_allowlist.map((x) => <code key={x}>{x}</code>)}</dd>
         <dt>Categories</dt><dd className="chips">{m.category_allowlist.map((x) => <code key={x}>{x}</code>)}</dd>
         <dt>Limits</dt>
         <dd>
@@ -144,9 +160,12 @@ function MandatePane(props: { mandates: MandateStatus[]; current: MandateStatus 
         <dt>Expires</dt><dd>{new Date(m.exp * 1000).toLocaleString()}</dd>
         <dt>Id</dt><dd><code>{m.mandate_id}</code></dd>
       </dl>
-      <button className={`revoke ${arming ? "armed" : ""}`} disabled={state === "revoked"} onClick={onRevoke}>
-        {state === "revoked" ? "Revoked" : arming ? "Click again to revoke" : "Revoke mandate"}
-      </button>
+      <div className="actions">
+        <button className={`revoke ${arming ? "armed" : ""}`} disabled={state === "revoked"} onClick={onRevoke}>
+          {state === "revoked" ? "Revoked" : arming ? "Click again to revoke" : "Revoke mandate"}
+        </button>
+        <button className="plain" onClick={() => setSigning(true)}>New mandate</button>
+      </div>
       {error && <p className="error">{error}</p>}
     </section>
   );
@@ -195,13 +214,20 @@ function SpendPane({ current }: { current: MandateStatus | null }) {
 
 // ── 3. the ledger: every attempt, allowed and denied ──────────────────
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
+// Today's rows show the time. Older rows show the date too.
+const time = (iso: string) => {
+  const d = new Date(iso);
+  const t = d.toLocaleTimeString([], { hour12: false });
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${t}`;
+};
 const blank = (v: unknown) => (v == null ? "" : String(v));
 
-function LedgerPane({ rows }: { rows: LedgerRow[] }) {
+function LedgerPane({ rows, fresh }: { rows: LedgerRow[]; fresh: Set<string> }) {
+  const [find, setFind] = useState("");
+  const grid = useRef<GridApi<LedgerRow> | null>(null);
   const columns = useMemo<ColDef<LedgerRow>[]>(
     () => [
-      { field: "ts", headerName: "Time", width: 100, valueFormatter: (p) => time(p.value), sort: "desc" },
+      { field: "ts", headerName: "Time", width: 140, valueFormatter: (p) => time(p.value), sort: "desc" },
       { field: "merchant", headerName: "Merchant", flex: 1.2, minWidth: 190, valueFormatter: (p) => blank(p.value) },
       { field: "item", headerName: "Item", flex: 1.4, minWidth: 160, valueFormatter: (p) => blank(p.value) },
       {
@@ -221,7 +247,13 @@ function LedgerPane({ rows }: { rows: LedgerRow[] }) {
     [],
   );
 
-  const rowClassRules = useMemo<RowClassRules<LedgerRow>>(() => ({ denied: (p) => p.data?.verdict === "DENY" }), []);
+  const rowClassRules = useMemo<RowClassRules<LedgerRow>>(
+    () => ({
+      denied: (p) => p.data?.verdict === "DENY",
+      fresh: (p) => !!p.data && fresh.has(p.data.ledger_id),
+    }),
+    [fresh],
+  );
   const getRowId = useCallback((p: GetRowIdParams<LedgerRow>) => p.data.ledger_id, []);
 
   const allowed = rows.filter((r) => r.verdict === "ALLOW").length;
@@ -232,11 +264,15 @@ function LedgerPane({ rows }: { rows: LedgerRow[] }) {
         <span className="aside counts">
           {rows.length} attempts, {allowed} allowed, <span className="denied"><b>{rows.length - allowed} denied</b></span>
         </span>
+        <input className="find" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find in the ledger" aria-label="Find in the ledger" />
+        <button className="plain" onClick={() => grid.current?.exportDataAsCsv({ fileName: "mandate-ledger.csv" })}>Export CSV</button>
       </div>
       <div className="grid">
         <AgGridReact<LedgerRow>
           theme={gridTheme}
           rowData={rows}
+          quickFilterText={find}
+          onGridReady={(e) => (grid.current = e.api)}
           columnDefs={columns}
           getRowId={getRowId}
           rowClassRules={rowClassRules}

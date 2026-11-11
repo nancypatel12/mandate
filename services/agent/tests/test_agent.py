@@ -245,3 +245,109 @@ def test_main_requires_settings(env):
     env.delenv("LLM_API_KEY")
     with pytest.raises(SystemExit):
         entry.main(["buy filters"])
+
+
+# ── the HTTP runner the console uses ─────────────────────────────────
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from agent import server  # noqa: E402
+
+RUN_ENV = {"LLM_API_KEY": "k", "LLM_BASE_URL": "http://llm", "LLM_MODEL": "m", "MANDATE_URL": "http://mandate/"}
+FILTERS = "channel3:target-com"
+
+
+def runner(*turns, env=RUN_ENV, authorize=None, sent=None):
+    def auth(url, intent, token):
+        if sent is not None:
+            sent.update(url=url, intent=intent, token=token)
+        return {"verdict": "DENY", "reason_code": "MERCHANT_NOT_ALLOWED"}
+
+    return TestClient(server.create_app(env=env, make_llm=lambda: ScriptedLLM(*turns),
+                                        authorize=authorize or auth, sync=True))
+
+
+def first_snapshot_product():
+    return StaticCatalog().products[0]
+
+
+def test_runner_records_search_page_intent_and_verdict():
+    p = first_snapshot_product()
+    sent = {}
+    c = runner(([call("search_products", {"query": p.title})], None),
+               ([call("get_product_page", {"product_id": p.product_id})], None),
+               BUY, sent=sent)
+    rid = c.post("/runs", json={"task": "buy filters", "token": "tok", "tamper": True}).json()["run_id"]
+    view = c.get(f"/runs/{rid}").json()
+    kinds = [e["kind"] for e in view["events"]]
+    assert kinds == ["task", "search", "page", "intent", "verdict"] and view["status"] == "done"
+    page = view["events"][2]
+    assert page["injected"] == INJECTION and INJECTION in page["text"]
+    assert sent["url"] == "http://mandate" and sent["token"] == "tok"
+    assert sent["intent"]["merchant"] == FILTERS
+
+
+def test_runner_clean_page_has_no_injection_and_notes_missing_pages():
+    p = first_snapshot_product()
+    c = runner(([call("get_product_page", {"product_id": p.product_id})], None),
+               ([call("get_product_page", {"product_id": "nope"})], None),
+               ([], "nothing suitable"))
+    rid = c.post("/runs", json={"task": "buy filters", "token": "tok"}).json()["run_id"]
+    events = c.get(f"/runs/{rid}").json()["events"]
+    assert events[1]["kind"] == "page" and events[1]["injected"] is None
+    assert [e["kind"] for e in events[2:]] == ["note", "note", "note"]
+    assert events[-1]["text"] == "The agent proposed no purchase."
+
+
+def test_runner_reports_a_failed_run():
+    def boom(url, intent, token):
+        raise httpx.ConnectError("mandate service down")
+
+    c = runner(BUY, authorize=boom)
+    rid = c.post("/runs", json={"task": "buy filters", "token": "tok"}).json()["run_id"]
+    view = c.get(f"/runs/{rid}").json()
+    assert view["status"] == "error" and view["events"][-1]["text"].startswith("ConnectError")
+
+
+def test_runner_needs_llm_settings_and_valid_input():
+    c = runner(BUY, env={"LLM_BASE_URL": "http://llm"})
+    assert c.get("/healthz").json()["missing"] == ["LLM_API_KEY", "LLM_MODEL"]
+    assert c.post("/runs", json={"task": "buy filters", "token": "tok"}).status_code == 503
+    c = runner(BUY)
+    assert c.post("/runs", json={"task": "", "token": "tok"}).status_code == 422
+    assert c.post("/runs", json={"task": "x" * 501, "token": "tok"}).status_code == 422
+    assert c.get("/runs/run_nope").status_code == 404
+    assert c.get("/healthz").json()["catalog"] == "snapshot"
+
+
+def test_runner_uses_channel3_when_a_key_is_set_and_falls_back(monkeypatch):
+    class Down(Channel3Catalog):
+        def __init__(self, key):
+            super().__init__(key, transport=httpx.MockTransport(lambda r: httpx.Response(402)))
+
+    monkeypatch.setattr(server, "Channel3Catalog", Down)
+    c = runner(([call("search_products", {"query": "aeropress filters"})], None), BUY,
+               env=RUN_ENV | {"CHANNEL3_API_KEY": "c3"})
+    rid = c.post("/runs", json={"task": "buy filters", "token": "tok"}).json()["run_id"]
+    texts = [e.get("text", "") for e in c.get(f"/runs/{rid}").json()["events"]]
+    assert any("bundled snapshot" in t for t in texts)
+
+
+def test_runner_runs_in_a_thread_and_limits_concurrency():
+    import threading
+    gate = threading.Event()
+
+    def slow(url, intent, token):
+        gate.wait(5)
+        return {"verdict": "ALLOW"}
+
+    c = TestClient(server.create_app(env=RUN_ENV, make_llm=lambda: ScriptedLLM(BUY), authorize=slow))
+    body = {"task": "buy filters", "token": "tok"}
+    ids = [c.post("/runs", json=body).json()["run_id"] for _ in range(2)]
+    assert c.post("/runs", json=body).status_code == 429
+    gate.set()
+    for _ in range(200):
+        if all(c.get(f"/runs/{i}").json()["status"] == "done" for i in ids):
+            break
+        threading.Event().wait(0.01)
+    assert all(c.get(f"/runs/{i}").json()["events"][-1]["verdict"]["verdict"] == "ALLOW" for i in ids)

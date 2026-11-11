@@ -12,15 +12,15 @@ This document says what we protect, from whom, where the trust boundaries are, a
 | PayPal client secret | `.env`, mandate service only | Can create orders on the merchant account |
 | Vault payment token | `funding` table, mandate service only | Charges the human's wallet without them present |
 | Signing key | `.env`, mandate service only | Whoever holds it can mint any mandate |
-| Admin token | `.env`; mandate service and the console proxy | Can issue and revoke mandates |
-| Mandate token | Held by the agent | Spends within one mandate's limits |
+| Admin token | `.env`; mandate service and the console proxy. Never the browser, never the agent. | Can issue and revoke mandates |
+| Mandate token | Held by the agent. The console tab that signed it keeps a copy, to hand to the agent. | Spends within one mandate's limits |
 | Ledger | SQLite, append-only | The record of every attempt; evidence after an incident |
 
 ## Adversaries
 
 **1. A compromised model.** The main one. Prompt injection, a jailbreak, a bad fine-tune or a buggy loop all look the same from outside: the agent asks for purchases the human didn't intend. We assume it controls every field of every intent and can call any HTTP endpoint it can reach.
 
-**2. Malicious merchant content.** Product pages are written by merchants, and a merchant (or someone who compromised one) can put instructions in them. This is how adversary 1 usually comes about. In our live runs, a plain paragraph on a product page made `openai/gpt-oss-120b` attempt a $480 off-scope purchase in **3 out of 3** runs.
+**2. Malicious merchant content.** Product pages are written by merchants, and a merchant (or someone who compromised one) can put instructions in them. This is how adversary 1 usually comes about. In our live runs, a plain paragraph on a product page made `openai/gpt-oss-120b` attempt a $480 off-scope purchase in **10 out of 10** runs.
 
 **3. Token tampering and forgery.** The agent holds a JWT. It may edit the claims, strip the signature, switch the algorithm, or mint a token with a key it made up.
 
@@ -34,7 +34,7 @@ This document says what we protect, from whom, where the trust boundaries are, a
  human ──(admin token)──▶ mandate service ◀──(mandate token)── agent ◀── merchant pages (untrusted)
    │                          │  ▲
    │                          │  └── SQLite: mandates, revocation, spend, ledger
-   └──▶ console ──(proxy: read + revoke only)──┘
+   └──▶ console ──(proxy: read, sign, revoke)──┘        console ──(task + mandate token)──▶ agent runner
                               │
                               └──(client secret, vault token)──▶ PayPal sandbox
 ```
@@ -43,7 +43,8 @@ This document says what we protect, from whom, where the trust boundaries are, a
 |---|---|---|
 | Agent → mandate service | A mandate token and a `PurchaseIntent` | Everything is untrusted: signature checked, intent shape checked, then policy. |
 | Mandate service → PayPal | Client secret, vault token, order | Only the mandate service crosses it. The agent has no code or credentials for it, and an AST test fails the build if it ever does (I1). |
-| Console → mandate service | Reads, plus revoke | The proxy strips browser auth headers, forwards GETs, and adds the admin token only to `POST /mandates/{id}/revoke`. Issue and authorize get 403. |
+| Console → mandate service | Reads, sign, revoke | The console is the human's seat. The proxy strips browser auth headers, forwards GETs, and adds the admin token to exactly two calls: `POST /mandates` (sign) and `POST /mandates/{id}/revoke`. Every write must carry an `X-Mandate-Console` header, which a browser won't send across origins, so another site open in the same browser can't sign or revoke. Authorize and everything else get 403. |
+| Console → agent runner | A task, a mandate token, and whether to poison the page | The runner is on the agent's side of the fence: an LLM key and a catalog key, no PayPal credentials, no admin token. The proxy never adds a header to it. It can do only what the token it is handed allows. |
 | Merchant pages → agent | Product text | Passed through verbatim. We don't try to sanitize it, because no sanitizer is reliable. The fence is downstream. |
 
 ## Defenses, and the attack each one stops
@@ -85,7 +86,7 @@ Honest limits. Some are inherent to the design; some are gaps we know about.
 7. **Capture succeeds, then the ledger write fails.** The agent is told DENY but money moved. It needs a SQLite failure at exactly that moment. Fix: write the ALLOW row in the same transaction that marks the intent complete, and reconcile against PayPal on startup.
 8. **PENDING captures.** We treat a PENDING capture as a failure and release the budget. If PayPal completes it later, money moved without counting against the caps. Fix: keep the reservation and reconcile with webhooks.
 9. **Crash between capture and ledger.** That intent stays "in flight" and every retry is refused. That's safe (no double charge) but stuck until an operator clears it.
-10. **The console is unauthenticated on localhost.** Anyone on the machine who can reach `127.0.0.1:5173` can read the ledger and revoke. Revoke can only remove authority, which is why it's the one action exposed, but a shared or hosted deployment would need real login.
+10. **The console is unauthenticated on localhost.** Anyone on the machine who can reach `127.0.0.1:5173` can read the ledger, revoke, and sign a new mandate against the linked sandbox wallet. That is the human's power, and on a single-user laptop that's who is there. The ports bind to `127.0.0.1` and cross-site writes are refused, but a shared or hosted deployment would need real login before signing is exposed. An earlier build exposed only revoke; we widened it so a person can do the whole job without a terminal.
 11. **Revocation is local.** It takes effect on the next `/authorize`, within milliseconds, but it can't cancel an order PayPal has already captured.
 12. **No rate limit on `/authorize` itself.** Denials cost nothing and are logged, but a flood would grow the ledger. Put a proxy rate limit in front in production.
 13. **Demo-grade secrets.** HS256 with a shared key and secrets in `.env` are fine for a local demo. Production would want asymmetric signing (so verifiers can't mint) and a secrets manager.

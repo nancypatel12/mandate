@@ -1,6 +1,6 @@
 # Architecture
 
-Three processes, one database, one payment rail. The agent can reach exactly one endpoint.
+Four processes, one database, one payment rail. The agent can reach exactly one endpoint.
 
 ```
                  ┌──────────────────────────── untrusted ───────────────────────────┐
@@ -13,7 +13,7 @@ Three processes, one database, one payment rail. The agent can reach exactly one
                                                  ▼
   human ──(admin token)──▶ ┌────────────────────────────────────────────┐
                            │ mandate service (services/mandate, FastAPI) │
-  console ──(read+revoke)─▶│   tokens.verify  → INVALID_SIGNATURE         │
+  console ─(read,sign,revoke)▶│ tokens.verify  → INVALID_SIGNATURE         │
   (web, AG Grid)           │   policy.parse   → MALFORMED_INTENT          │
                            │   policy.evaluate (pure)  → 8 more codes     │
                            │   spend.reserve  (BEGIN IMMEDIATE)           │
@@ -45,7 +45,8 @@ Three processes, one database, one payment rail. The agent can reach exactly one
 | SQLite, plain `sqlite3` | One file, `BEGIN IMMEDIATE` gives the atomicity the caps need, triggers make the ledger append-only | Postgres plus an ORM: more to run, nothing gained at this scale |
 | Reserve before charging, release on failure | Parallel requests see each other's spend. Outages don't eat the budget. | Charge then count: two racing requests could both pass the cap. |
 | Polling console (500 ms) | Meets the under-one-second bar with no extra moving parts | Websockets or SSE |
-| The console proxy holds the admin token | The browser never sees a secret. Revoke is the only write it allows, and revoking can only remove authority. | Putting the token in the frontend build |
+| The console proxy holds the admin token | The browser never sees a secret. The proxy adds the token to two calls only, sign and revoke, and refuses writes that don't carry the console's header. | Putting the token in the frontend build |
+| The agent runs behind a small HTTP runner (`agent/server.py`) | The console can start the agent and show each step: the search, the page text it read, the purchase it asked for, the verdict. The runner is the agent's side: no PayPal, no admin token. | Running the agent inside the mandate service (breaks the separation), or terminal only |
 
 ## Code map
 
@@ -66,6 +67,6 @@ Three processes, one database, one payment rail. The agent can reach exactly one
 
 ## Running it
 
-- `docker compose up -d --build`: mandate service on `127.0.0.1:8000`, console on `127.0.0.1:5173`.
-- Only the `mandate` container gets PayPal credentials. `web` gets the admin token for its proxy. The `agent` container gets an LLM key, a catalog key and a mandate token, nothing else.
+- `docker compose up -d --build`: mandate service on `127.0.0.1:8000`, console on `127.0.0.1:5173`, and the agent runner on the internal network only.
+- Only the `mandate` container gets PayPal credentials. `web` gets the admin token for its proxy. The `runner` and `agent` containers get an LLM key and a catalog key. Their mandate token arrives with each run. Nothing else.
 - Data lives in `./data` (bind-mounted). There is no database container.
